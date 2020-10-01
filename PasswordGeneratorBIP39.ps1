@@ -1,13 +1,22 @@
-# DOES NOT USE SECURE RANDOM
-# Random word picker
+<#
+!!! DOES NOT USE SECURE RANDOM !!!
+Random word picker (32-Bit random only)
+Use multiple rounds to increase the complexity 
 
-# Uses the BIP39 word list for easier to remember passwords
-# Inspired by XKCD's https://xkcd.com/936/
+1 round 2^32
+2 rounds 2^64
+3 rounds 2^96
+...
+8 rounds 2^256
 
-# You can choose your seed value and word count to replicate your word selection
+Uses the BIP39 word list for easier to remember passwords
+Inspired by XKCD's https://xkcd.com/936/
 
-<# To-do List:
-- Allow for string based seeds
+You can choose your seed value and word count to replicate your word selection
+- Strings are MD5 hashed, so any sentence/passphrase is valid.
+- Numbers outside of +-2147483647 are moduloed (ex $num % 2147483647) the remainder is the seed
+
+To-do List:
 - Consider using System.Security.Cryptography.RNGCryptoServiceProvider
 #>
 
@@ -23,20 +32,31 @@ Write-Host " The base seed for this OS is: $(Get-Random -SetSeed 0)"
 [int]$round = 1
 For ($round = 1; $round -le $rounds; $round++){
     
-    Write-Host "   Randomize round $round :"
+    Write-Host "`n   Randomize round $round :"
     
     # Clean the seed and set wordlist length
-    $seed = $count = $null
+    [string]$seed = $count = $null
     $maxcount = $wordList.Length
 
     # For this loop, how many words do you want to pick?
-    [int]$count = Read-Host -Prompt "There are $maxcount words, how many do you want? ($maxcount)"
+    [int]$count = Read-Host -Prompt "`nThere are $maxcount words. `nHow many do you want to have left at the end of this round? ($maxcount)"
     if ( $count -and ($count -lt $maxcount)){$maxcount = $count}
 
-    $seed = Read-Host -Prompt "What seed do you want for round $round? 32-bit number"
+    $seed = Read-Host -Prompt "`nWhat seed information do you want for round $($round)? `nAnything other than INT32 will be truncated/hashed `n(Will use Get-Random if blank)"
     if (!$seed){$seed = get-random}
+    
+    # If input is a string, MD5 hash it, returns bytes, convert that to INT32
+    if (!($seed -as [double])){
+        $string = $seed
+        $hasher = [System.Security.Cryptography.HashAlgorithm]::Create("MD5")
+        $bytes = $Hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($String))
+        $seed = [System.BitConverter]::ToInt32($bytes,0)
+    }
 
-    $wordList = Get-Random -SetSeed $seed -Count $maxcount $wordList 
+    # Modulo the number to ensure that it is within bounds of INT32
+    $seed = $seed % [int]::MaxValue
+
+    $wordList = Get-Random -SetSeed $($seed -as [int]) -Count $maxcount $wordList 
 }
 
 $wordList
